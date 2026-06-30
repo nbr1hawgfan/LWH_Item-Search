@@ -12,6 +12,8 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>LWH Bay Lookup</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
+<!-- Tesseract OCR — loaded early so WASM is ready when user taps scan -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 /* ===================== TOKENS — true black/white, status colors only ===================== */
 :root {
@@ -253,6 +255,7 @@ table.data-table tbody td { padding:9px 13px; color:var(--ink); font-weight:500;
 .scan-aim-box { position:relative; }
 .scan-aim-box.barcode-mode { width:80%; height:44px; }
 .scan-aim-box.qr-mode      { width:200px; height:200px; }
+.scan-aim-box.text-mode    { width:65%; height:60px; }
 .scan-aim-box::before, .scan-aim-box::after,
 .scan-aim-box .corner-br, .scan-aim-box .corner-bl {
   content:''; position:absolute; width:22px; height:22px; border-color:#fff; border-style:solid;
@@ -300,6 +303,19 @@ table.data-table tbody td { padding:9px 13px; color:var(--ink); font-weight:500;
   border:1.5px solid rgba(255,255,255,0.15); border-radius:8px;
   padding:13px 16px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;
 }
+/* Capture button — shown only in Text (OCR) mode */
+.scan-footer { padding:14px 18px 18px; display:none; flex-direction:column; align-items:center; justify-content:center; }
+.scan-footer.show { display:flex; }
+.scan-capture-btn {
+  width:64px; height:64px; border-radius:50%;
+  background:#fff; border:4px solid rgba(255,255,255,0.25);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:transform 0.1s, background 0.1s;
+  box-shadow:0 0 0 6px rgba(255,255,255,0.08);
+}
+.scan-capture-btn:active { transform:scale(0.93); background:#ddd; }
+.scan-capture-btn svg { width:26px; height:26px; }
+.scan-capture-hint { font-size:11px; color:rgba(255,255,255,0.4); margin-top:6px; }
 #scanCanvas { display:none; }
 </style>
 </head>
@@ -443,6 +459,9 @@ table.data-table tbody td { padding:9px 13px; color:var(--ink); font-weight:500;
       <button class="scan-mode-btn" id="modeBtnQR" onclick="setScanMode('qr')">
         <span class="scan-mode-icon">⊞</span> QR
       </button>
+      <button class="scan-mode-btn" id="modeBtnText" onclick="setScanMode('text')">
+        <span class="scan-mode-icon">Aa</span> Text
+      </button>
     </div>
 
     <div class="scan-confirm" id="scanConfirm">
@@ -453,6 +472,16 @@ table.data-table tbody td { padding:9px 13px; color:var(--ink); font-weight:500;
         <button class="scan-confirm-search" onclick="commitScan()">Search ↵</button>
         <button class="scan-confirm-retry" onclick="retryScan()">Scan Again</button>
       </div>
+    </div>
+
+    <div class="scan-footer" id="scanFooter">
+      <button class="scan-capture-btn" id="scanCaptureBtn" onclick="captureAndOCR()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="7"/>
+          <circle cx="12" cy="12" r="3" fill="#111" stroke="none"/>
+        </svg>
+      </button>
+      <div class="scan-capture-hint">Tap to capture text</div>
     </div>
   </div>
 </div>
@@ -533,6 +562,8 @@ var previewLoop      = null;
 var polyfillLoaded   = false;
 var zxingLoaded       = false;
 var zxingReader        = null;
+var tesseractWorker  = null;
+var tesseractReady   = false;
 
 /* ============================================================
    INIT
@@ -555,6 +586,13 @@ window.addEventListener('load', function () {
       });
     } catch (e) { barcodeDetector = null; }
   }
+
+  // Warm Tesseract so it's ready by the time someone taps Text mode
+  try {
+    Tesseract.createWorker('eng', 1, { logger: function () {} })
+      .then(function (w) { tesseractWorker = w; tesseractReady = true; })
+      .catch(function () {});
+  } catch (e) {}
 });
 
 /* Keep search panel positioned directly below the (now two-row) nav,
@@ -1166,6 +1204,8 @@ function openScan(target) {
   document.getElementById('scanConfirm').classList.remove('show');
   document.getElementById('modeBtnBarcode').classList.add('active');
   document.getElementById('modeBtnQR').classList.remove('active');
+  document.getElementById('modeBtnText').classList.remove('active');
+  document.getElementById('scanFooter').classList.remove('show');
   document.getElementById('scanAimBox').className = 'scan-aim-box barcode-mode';
   document.getElementById('scanHint').textContent = 'Hold steady — barcode reads automatically';
   var titleEl = document.querySelector('.scan-modal-title');
@@ -1205,22 +1245,46 @@ function closeScan() {
 
 function retryScan() {
   document.getElementById('scanConfirm').classList.remove('show');
-  setScanStatus('Scanning for ' + (scanMode === 'qr' ? 'QR codes' : 'barcodes') + '...', false);
-  startBarcodeLoop();
+  document.getElementById('scanCaptureBtn').disabled = false;
+  if (scanMode === 'text') {
+    setScanStatus('Camera ready — frame text and tap to capture', false);
+  } else {
+    setScanStatus('Scanning for ' + (scanMode === 'qr' ? 'QR codes' : 'barcodes') + '...', false);
+    startBarcodeLoop();
+  }
 }
 
 function setScanMode(mode) {
   scanMode = mode;
-  var isQR = mode === 'qr';
-  document.getElementById('modeBtnBarcode').classList.toggle('active', !isQR);
+  var isQR   = mode === 'qr';
+  var isText = mode === 'text';
+
+  document.getElementById('modeBtnBarcode').classList.toggle('active', !isQR && !isText);
   document.getElementById('modeBtnQR').classList.toggle('active', isQR);
-  document.getElementById('scanAimBox').className = 'scan-aim-box ' + (isQR ? 'qr-mode' : 'barcode-mode');
+  document.getElementById('modeBtnText').classList.toggle('active', isText);
+
+  var aimBox = document.getElementById('scanAimBox');
+  if (isQR)        aimBox.className = 'scan-aim-box qr-mode';
+  else if (isText) aimBox.className = 'scan-aim-box text-mode';
+  else              aimBox.className = 'scan-aim-box barcode-mode';
+
   document.getElementById('scanHint').textContent = isQR
     ? 'Centre the QR code in the square'
+    : isText
+    ? 'Frame the text in the brackets, then tap to capture'
     : 'Hold steady — barcode reads automatically';
+
   document.getElementById('scanConfirm').classList.remove('show');
-  setScanStatus('Scanning for ' + (isQR ? 'QR codes' : 'barcodes') + '...', false);
-  startBarcodeLoop();
+  document.getElementById('scanFooter').classList.toggle('show', isText);
+  document.getElementById('scanCaptureBtn').disabled = false;
+
+  if (isText) {
+    stopBarcodeLoop();
+    setScanStatus('Camera ready — frame text and tap to capture', false);
+  } else {
+    setScanStatus('Scanning for ' + (isQR ? 'QR codes' : 'barcodes') + '...', false);
+    startBarcodeLoop();
+  }
 }
 
 /* ============================================================
@@ -1396,6 +1460,89 @@ function playBeep() {
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.12);
   } catch (e) {}
+}
+
+/* ============================================================
+   OCR — CAPTURE + PROCESS (Text mode)
+============================================================ */
+function captureAndOCR() {
+  var video  = document.getElementById('scanVideo');
+  var canvas = document.getElementById('scanCanvas');
+
+  if (!video.videoWidth) {
+    setScanStatus('Camera not ready yet — try again', false);
+    return;
+  }
+
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+
+  // Crop to aim box region (centre 65% wide x 33% tall) — matches text-mode aim box
+  var cw = canvas.width, ch = canvas.height;
+  var cropW = Math.round(cw * 0.65), cropH = Math.round(ch * 0.33);
+  var cropX = Math.round((cw - cropW) / 2), cropY = Math.round((ch - cropH) / 2);
+
+  var cropCanvas = document.createElement('canvas');
+  cropCanvas.width  = cropW * 2;
+  cropCanvas.height = cropH * 2;
+  var cropCtx = cropCanvas.getContext('2d');
+  cropCtx.filter = 'grayscale(1) contrast(1.8) brightness(1.1)';
+  cropCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropCanvas.width, cropCanvas.height);
+
+  document.getElementById('scanCaptureBtn').disabled = true;
+  setScanStatus('Reading text…', true);
+  runOCR(cropCanvas.toDataURL('image/png'));
+}
+
+function runOCR(imageData) {
+  var options = {
+    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -',
+    preserve_interword_spaces: '0'
+  };
+
+  var doOCR = function (worker) {
+    worker.recognize(imageData, options).then(function (result) {
+      var raw   = result.data.text || '';
+      var token = extractBestToken(raw);
+      if (token) {
+        showScanConfirm(token);
+      } else {
+        setScanStatus('Could not read text clearly — try again closer', false);
+        document.getElementById('scanCaptureBtn').disabled = false;
+      }
+    }).catch(function (err) {
+      setScanStatus('OCR error — ' + err.message, false);
+      document.getElementById('scanCaptureBtn').disabled = false;
+    });
+  };
+
+  if (tesseractReady && tesseractWorker) {
+    doOCR(tesseractWorker);
+  } else {
+    Tesseract.createWorker('eng', 1, { logger: function () {} })
+      .then(function (w) { tesseractWorker = w; tesseractReady = true; doOCR(w); })
+      .catch(function (err) {
+        setScanStatus('OCR engine failed: ' + err.message, false);
+        document.getElementById('scanCaptureBtn').disabled = false;
+      });
+  }
+}
+
+/* Best token extraction from raw OCR text — favors mixed alphanumeric
+   tokens (e.g. 514FS, 2901-T24212905) over plain words */
+function extractBestToken(raw) {
+  var cleaned = raw.replace(/\n/g, ' ').replace(/[^A-Za-z0-9 -]/g, '').trim().toUpperCase();
+  if (!cleaned) return '';
+  var tokens = cleaned.split(/\s+/).filter(function (t) { return t.length >= 3; });
+  if (!tokens.length) return cleaned.replace(/\s+/g, '').slice(0, 30) || '';
+  var scored = tokens.map(function (t) {
+    var mixed = /[A-Z]/.test(t) && /[0-9]/.test(t);
+    var lenOk = t.length >= 4 && t.length <= 20;
+    return { t: t, score: (mixed ? 20 : 0) + (lenOk ? 10 : 0) + t.length };
+  });
+  scored.sort(function (a, b) { return b.score - a.score; });
+  return scored[0].t;
 }
 
 /* ============================================================
