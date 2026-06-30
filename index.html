@@ -564,6 +564,7 @@ var zxingLoaded       = false;
 var zxingReader        = null;
 var tesseractWorker  = null;
 var tesseractReady   = false;
+var iosWatchdog      = null;
 
 /* ============================================================
    INIT
@@ -1194,6 +1195,17 @@ function isIOS() {
   return isAppleDevice || isIpadOS13Plus;
 }
 
+/* Shown only if a real camera attempt on iOS times out or fails —
+   not a hard upfront block anymore, just an honest fallback. */
+function showIOSFallback_() {
+  stopBarcodeLoop();
+  stopPreviewLoop();
+  if (scanStream) { scanStream.getTracks().forEach(function (t) { t.stop(); }); scanStream = null; }
+  document.getElementById('scanModeRow').style.display = 'none';
+  document.getElementById('scanFooter').classList.remove('show');
+  setScanStatus('Camera didn\'t respond on this device — type the number above, or use the keyboard mic for voice input', false);
+}
+
 /* ============================================================
    SCAN — OPEN / CLOSE / MODE
 ============================================================ */
@@ -1208,20 +1220,29 @@ function openScan(target) {
   document.getElementById('scanFooter').classList.remove('show');
   document.getElementById('scanAimBox').className = 'scan-aim-box barcode-mode';
   document.getElementById('scanHint').textContent = 'Hold steady — barcode reads automatically';
+  document.getElementById('scanModeRow').style.display = '';
   var titleEl = document.querySelector('.scan-modal-title');
   if (titleEl) titleEl.textContent = scanTarget === 'items' ? 'Scan Item Tag' : 'Scan Pallet';
   document.getElementById('scanModalBg').classList.add('open');
 
-  if (isIOS()) {
-    document.getElementById('scanModeRow').style.display = 'none';
-    setScanStatus('Camera scanning isn\'t supported on iPhone/iPad — type the number above, or use the keyboard mic for voice input', false);
-    return;
-  }
-  document.getElementById('scanModeRow').style.display = '';
+  var settled = false;
+
+  // iOS/WebKit's known failure mode isn't always a clean rejection — sometimes
+  // the permission prompt or stream just never resolves. A watchdog timeout
+  // means we still degrade to the helpful fallback message instead of leaving
+  // someone staring at "Starting camera..." forever.
+  iosWatchdog = isIOS() ? setTimeout(function () {
+    if (settled) return;
+    settled = true;
+    showIOSFallback_();
+  }, 6000) : null;
 
   navigator.mediaDevices.getUserMedia({
     video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
   }).then(function (stream) {
+    if (settled) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+    settled = true;
+    if (iosWatchdog) { clearTimeout(iosWatchdog); iosWatchdog = null; }
     scanStream = stream;
     var video = document.getElementById('scanVideo');
     video.srcObject = stream;
@@ -1231,13 +1252,21 @@ function openScan(target) {
       startBarcodeLoop();
     });
   }).catch(function (err) {
-    setScanStatus('Camera error: ' + err.message, false);
+    if (settled) return;
+    settled = true;
+    if (iosWatchdog) { clearTimeout(iosWatchdog); iosWatchdog = null; }
+    if (isIOS()) {
+      showIOSFallback_();
+    } else {
+      setScanStatus('Camera error: ' + err.message, false);
+    }
   });
 }
 
 function closeScan() {
   stopBarcodeLoop();
   stopPreviewLoop();
+  if (iosWatchdog) { clearTimeout(iosWatchdog); iosWatchdog = null; }
   document.getElementById('scanModalBg').classList.remove('open');
   if (scanStream) { scanStream.getTracks().forEach(function (t) { t.stop(); }); scanStream = null; }
   document.getElementById('scanVideo').srcObject = null;
