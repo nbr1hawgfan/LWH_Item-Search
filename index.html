@@ -322,7 +322,7 @@ table.data-table tbody td { padding:9px 13px; color:var(--ink); font-weight:500;
         <input type="search" id="itemSearch"
           placeholder="Item number, description, customer, location..."
           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-          inputmode="text" pattern="[^\-]*">
+          inputmode="text">
         <button class="search-clear" id="itemClear" onclick="itemClearSearch()">✕</button>
       </div>
     </div>
@@ -355,7 +355,7 @@ table.data-table tbody td { padding:9px 13px; color:var(--ink); font-weight:500;
         <input type="search" id="palletSearch"
           placeholder="LWH ID, Customer ID, Item, Lot, Bay..."
           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-          inputmode="text" pattern="[^\-]*">
+          inputmode="text">
         <button class="search-clear" id="palletClear" onclick="palletClearSearch()">✕</button>
         <button class="scan-btn" id="palletScanBtn" onclick="openScan()" title="Scan barcode or QR">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -577,33 +577,12 @@ function loadLocations() {
 }
 
 /* ============================================================
-   DASH SUPPRESSION (iOS keyboard fix)
-============================================================ */
-var dashWatchInterval = null;
-function stripDashes(el) {
-  if (el.value.indexOf('-') !== -1) el.value = el.value.replace(/-/g, '');
-}
-function startDashWatch(el) {
-  stopDashWatch();
-  dashWatchInterval = setInterval(function () { stripDashes(el); }, 80);
-}
-function stopDashWatch() {
-  if (dashWatchInterval) { clearInterval(dashWatchInterval); dashWatchInterval = null; }
-}
-
-/* ============================================================
    ITEM SUMMARY SEARCH
 ============================================================ */
 function initItemSearch() {
   var inp = document.getElementById('itemSearch');
-  inp.addEventListener('focus', function () { startDashWatch(inp); });
-  inp.addEventListener('blur', function () {
-    stopDashWatch(); stripDashes(inp);
-    setTimeout(function () { stripDashes(inp); }, 50);
-    setTimeout(function () { stripDashes(inp); }, 200);
-  });
   inp.addEventListener('input', function () {
-    var v = inp.value.replace(/-/g, '');
+    var v = inp.value;
     document.getElementById('itemClear').classList.toggle('visible', v.length > 0);
     clearTimeout(itemTimer);
     if (!v.trim()) { itemShowHint(); return; }
@@ -721,15 +700,8 @@ function itemShowError(msg) {
 ============================================================ */
 function initPalletSearch() {
   var inp = document.getElementById('palletSearch');
-  inp.addEventListener('focus', function () { startDashWatch(inp); });
-  inp.addEventListener('blur', function () {
-    stopDashWatch(); stripDashes(inp);
-    setTimeout(function () { stripDashes(inp); }, 50);
-    setTimeout(function () { stripDashes(inp); }, 200);
-    setTimeout(function () { stripDashes(inp); }, 500);
-  });
   inp.addEventListener('input', function () {
-    var v = inp.value.replace(/-/g, '');
+    var v = inp.value;
     document.getElementById('palletClear').classList.toggle('visible', v.length > 0);
     clearTimeout(palletTimer);
     if (!v.trim()) { palletShowHint(); return; }
