@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Bay Lookup">
+<meta name="theme-color" content="#ffffff">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>LWH Bay Lookup</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
+<style>
+/* ===================== TOKENS — true black/white, status colors only ===================== */
+:root {
+  --ink:      #000000;
+  --ink2:     #404040;
+  --ink3:     #8a8a8a;
+  --rule:     #e2e2e2;
+  --rule2:    #f0f0f0;
+  --bg:       #ffffff;
+  --surface:  #ffffff;
+  --accent:   #000000;
+  --accent-lt:#f0f0f0;
+  --green:    #16a34a;
+  --green-lt: #f0fdf4;
+  --red:      #dc2626;
+  --red-lt:   #fef2f2;
+  --amber:    #d97706;
+  --amber-lt: #fffbeb;
+  --radius:   8px;
+  --radius-lg:14px;
+  --shadow:   0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md:0 4px 14px rgba(0,0,0,0.12);
+}
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+html { font-size:16px; overflow-x:hidden; width:100%; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; background:var(--bg); color:var(--ink); min-height:100vh; -webkit-font-smoothing:antialiased; overflow-x:hidden; width:100%; }
+button { font-family:inherit; cursor:pointer; }
+input  { font-family:inherit; }
+
+/* ===================== NAV ===================== */
+.topnav { background:var(--surface); border-bottom:2px solid var(--ink); position:sticky; top:0; z-index:100; }
+.topnav-inner { display:flex; align-items:center; padding:0 14px; height:52px; gap:8px; max-width:1200px; margin:0 auto; min-width:0; overflow:hidden; }
+.brand { font-size:13px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; color:var(--ink); white-space:nowrap; }
+.nav-pills { display:flex; gap:3px; flex-shrink:0; }
+.nav-pill { padding:6px 14px; border-radius:20px; font-size:13px; font-weight:700; border:1.5px solid var(--rule); background:var(--surface); color:var(--ink2); white-space:nowrap; }
+.nav-pill.active { background:var(--ink); border-color:var(--ink); color:#fff; }
+.nav-stats { margin-left:auto; font-size:11px; color:var(--ink3); text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.nav-stats strong { color:var(--ink); }
+
+/* ===================== SEARCH PANEL ===================== */
+.search-panel { background:var(--surface); border-bottom:1px solid var(--rule); padding:10px 14px 8px; position:sticky; top:52px; z-index:90; overflow:hidden; }
+.search-panel-inner { max-width:1200px; margin:0 auto; }
+.search-box { display:flex; align-items:center; background:var(--bg); border:1.5px solid var(--ink); border-radius:var(--radius); overflow:hidden; transition:box-shadow 0.15s; }
+.search-box:focus-within { box-shadow:0 0 0 3px rgba(0,0,0,0.08); }
+.search-box input { flex:1; border:none; background:transparent; padding:13px 12px; font-size:16px; color:var(--ink); outline:none; }
+.search-box input::placeholder { color:var(--ink3); }
+.search-clear { background:none; border:none; color:var(--ink3); padding:0 10px; font-size:16px; display:none; align-items:center; cursor:pointer; }
+.search-clear.visible { display:flex; }
+
+.scan-btn {
+  background:none; border:none; color:var(--ink);
+  padding:0 12px; font-size:20px; display:flex; align-items:center;
+  cursor:pointer; border-left:1.5px solid var(--ink); height:100%;
+  min-width:44px; justify-content:center;
+  transition:background 0.12s;
+}
+.scan-btn:active { background:var(--accent-lt); }
+.scan-btn.loading { color:var(--ink3); animation:pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+/* ===================== CHIPS ===================== */
+.chip-row { display:flex; gap:6px; overflow-x:auto; padding-top:8px; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+.chip-row::-webkit-scrollbar { display:none; }
+.loc-chip { flex-shrink:0; padding:5px 12px; border-radius:20px; font-size:12px; font-weight:600; border:1.5px solid var(--rule); background:var(--surface); color:var(--ink2); white-space:nowrap; cursor:pointer; }
+.loc-chip.active { background:var(--ink); border-color:var(--ink); color:#fff; }
+
+/* ===================== CONTENT ===================== */
+.content-area { max-width:1200px; margin:0 auto; padding:12px; overflow:hidden; }
+
+/* ===================== META BAR ===================== */
+.meta-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; min-height:28px; gap:8px; flex-wrap:wrap; }
+.result-label { font-size:13px; font-weight:600; color:var(--ink2); }
+.meta-actions { display:flex; gap:6px; align-items:center; }
+.view-toggle { display:flex; border:1.5px solid var(--ink); border-radius:var(--radius); overflow:hidden; }
+.view-btn { padding:5px 11px; font-size:12px; font-weight:600; border:none; background:var(--surface); color:var(--ink2); border-right:1px solid var(--rule); cursor:pointer; }
+.view-btn:last-child { border-right:none; }
+.view-btn.active { background:var(--ink); color:#fff; }
+.action-btn { padding:6px 13px; font-size:12px; font-weight:600; border-radius:var(--radius); border:1.5px solid var(--ink); background:var(--surface); color:var(--ink); cursor:pointer; display:flex; align-items:center; gap:4px; }
+.action-btn.primary { background:var(--ink); color:#fff; }
+
+/* ===================== ITEM SUMMARY CARD ===================== */
+.item-card { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); border-left:3px solid var(--ink); padding:12px 14px; margin-bottom:8px; }
+.item-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:6px; }
+.item-name { font-size:14px; font-weight:800; color:var(--ink); line-height:1.3; }
+.item-desc { font-size:12px; color:var(--ink2); margin-bottom:8px; line-height:1.4; }
+.item-loc-tag { font-size:10px; font-weight:700; color:#fff; background:var(--ink); padding:3px 9px; border-radius:10px; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap; }
+.item-fields { display:grid; grid-template-columns:repeat(3,1fr); gap:8px 14px; margin-top:8px; padding-top:8px; border-top:1px solid var(--rule2); }
+.item-fields .fld-value { font-size:16px; font-weight:800; }
+
+/* ===================== BAY HERO (mobile single result) ===================== */
+.bay-hero-card { background:var(--surface); border-radius:var(--radius-lg); box-shadow:var(--shadow-md); overflow:hidden; margin-bottom:12px; max-width:100%; width:100%; border:1.5px solid var(--ink); }
+.bay-hero-top { background:var(--ink); color:#fff; padding:20px 16px 18px; display:flex; align-items:flex-start; justify-content:space-between; gap:8px; overflow:hidden; }
+.bay-eyebrow { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:rgba(255,255,255,0.5); margin-bottom:4px; }
+.bay-value-giant { font-size:clamp(36px,10vw,72px); font-weight:900; letter-spacing:-1px; line-height:1; color:#fff; overflow:hidden; max-width:55vw; }
+.bay-meta-right { display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; max-width:38vw; }
+.qty-pill { display:inline-flex; align-items:center; padding:6px 12px; border-radius:24px; font-size:15px; font-weight:800; background:rgba(255,255,255,0.15); color:#fff; border:1.5px solid rgba(255,255,255,0.3); white-space:nowrap; max-width:100%; }
+.qty-pill.good { background:var(--green); border-color:var(--green); }
+.qty-pill.zero { background:var(--amber); border-color:var(--amber); }
+.qty-pill.hold { background:var(--red);   border-color:var(--red); }
+.loc-pill { font-size:11px; font-weight:700; letter-spacing:0.5px; padding:3px 9px; border-radius:4px; background:rgba(255,255,255,0.15); color:rgba(255,255,255,0.85); text-transform:uppercase; }
+.bay-hero-body { padding:16px 20px; display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.bay-hero-desc { padding:0 20px 12px; font-size:13px; color:var(--ink2); line-height:1.5; }
+.bay-hero-foot { padding:10px 20px 16px; border-top:1px solid var(--rule2); display:flex; gap:8px; flex-wrap:wrap; }
+
+/* ===================== MULTI CARD (pallets) ===================== */
+.inv-card { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); border-left:3px solid var(--rule); padding:12px 14px; margin-bottom:8px; }
+.inv-card.status-good { border-left-color:var(--green); }
+.inv-card.status-zero { border-left-color:var(--amber); }
+.inv-card.status-hold { border-left-color:var(--red); }
+.card-row-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:6px; }
+.card-bay { font-size:24px; font-weight:900; letter-spacing:-0.5px; line-height:1; color:var(--ink); }
+.card-right { display:flex; flex-direction:column; align-items:flex-end; gap:3px; }
+.qty-badge { font-size:12px; font-weight:700; padding:3px 9px; border-radius:12px; background:var(--green-lt); color:var(--green); white-space:nowrap; }
+.qty-badge.zero { background:var(--amber-lt); color:var(--amber); }
+.qty-badge.hold { background:var(--red-lt);   color:var(--red); }
+.loc-tag { font-size:10px; font-weight:700; color:var(--ink3); text-transform:uppercase; letter-spacing:0.5px; }
+.card-item { font-size:13px; font-weight:700; color:var(--ink); margin-bottom:2px; }
+.card-desc { font-size:12px; color:var(--ink2); margin-bottom:8px; line-height:1.4; }
+.card-fields { display:grid; grid-template-columns:1fr 1fr; gap:6px 14px; }
+.fld { display:flex; flex-direction:column; }
+.fld-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--ink3); margin-bottom:1px; }
+.fld-value { font-size:12px; font-weight:600; color:var(--ink); }
+.fld-value.mono { font-family:'SF Mono','Courier New',monospace; font-size:11px; }
+.card-footer { display:flex; gap:6px; margin-top:10px; padding-top:8px; border-top:1px solid var(--rule2); flex-wrap:wrap; }
+.card-btn { font-size:11px; font-weight:600; padding:5px 10px; border-radius:6px; border:1.5px solid var(--ink); background:var(--surface); color:var(--ink); cursor:pointer; }
+.card-btn.blue { background:var(--ink); color:#fff; }
+.card-expand { display:none; margin-top:8px; padding-top:8px; border-top:1px solid var(--rule2); grid-template-columns:1fr 1fr; gap:6px 14px; }
+.card-expand.open { display:grid; }
+
+/* ===================== TABLE ===================== */
+.tbl-wrap { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; border:1px solid var(--rule); }
+.tbl-scroll { overflow-x:auto; }
+table.data-table { width:100%; border-collapse:collapse; font-size:13px; }
+table.data-table thead th { background:var(--ink); color:#fff; padding:9px 13px; text-align:left; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; white-space:nowrap; }
+table.data-table tbody tr { border-bottom:1px solid var(--rule2); cursor:pointer; }
+table.data-table tbody tr:last-child { border-bottom:none; }
+table.data-table tbody tr:hover { background:var(--rule2); }
+table.data-table tbody td { padding:9px 13px; color:var(--ink); font-weight:500; white-space:nowrap; }
+.td-bay { font-size:17px; font-weight:900; letter-spacing:-0.3px; }
+.td-mono { font-family:'SF Mono','Courier New',monospace; font-size:11px; }
+.td-desc { max-width:180px; overflow:hidden; text-overflow:ellipsis; color:var(--ink2); }
+.td-qty-good { color:var(--green); font-weight:700; }
+.td-qty-zero { color:var(--amber); font-weight:700; }
+.td-qty-hold { color:var(--red);   font-weight:700; }
+
+/* ===================== STATES ===================== */
+.state-block { padding:50px 20px; text-align:center; color:var(--ink3); }
+.state-icon  { font-size:36px; margin-bottom:10px; font-weight:700; color:var(--ink3); }
+.state-title { font-size:15px; font-weight:700; color:var(--ink2); margin-bottom:6px; }
+.state-sub   { font-size:13px; line-height:1.5; }
+.spinner { width:34px; height:34px; border:3px solid var(--rule); border-top-color:var(--ink); border-radius:50%; animation:spin 0.65s linear infinite; margin:0 auto 12px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* ===================== LOAD MORE ===================== */
+.load-more { width:100%; background:var(--surface); border:1.5px solid var(--ink); border-radius:var(--radius); padding:12px; font-size:13px; font-weight:700; color:var(--ink); margin-top:4px; cursor:pointer; }
+.load-more:hover { background:var(--accent-lt); }
+
+/* ===================== TOAST ===================== */
+.toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(70px); background:var(--ink); color:#fff; padding:9px 18px; border-radius:20px; font-size:13px; font-weight:600; transition:transform 0.25s; z-index:999; white-space:nowrap; box-shadow:var(--shadow-md); }
+.toast.show { transform:translateX(-50%) translateY(0); }
+
+/* ===================== OVERLAY ===================== */
+.overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:300; overflow-y:auto; padding:20px 14px; }
+.overlay.open { display:block; }
+.overlay-box { background:#fff; border-radius:var(--radius-lg); max-width:900px; margin:0 auto; overflow:hidden; border:1.5px solid var(--ink); }
+.overlay-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:2px solid var(--ink); gap:10px; }
+.overlay-title { font-size:15px; font-weight:700; color:var(--ink); }
+.overlay-sub   { font-size:11px; color:var(--ink3); margin-top:2px; }
+.overlay-actions { display:flex; gap:6px; flex-shrink:0; }
+.overlay-body { padding:18px 20px; }
+
+/* ===================== LABEL GRID ===================== */
+.label-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.label-card { border:1.5px solid #ccc; border-radius:8px; padding:10px 8px 8px; text-align:center; page-break-inside:avoid; break-inside:avoid; }
+.label-bay    { font-size:22px; font-weight:900; letter-spacing:0.5px; color:var(--ink); margin-bottom:1px; }
+.label-loc    { font-size:9px; text-transform:uppercase; letter-spacing:0.5px; color:var(--ink3); margin-bottom:5px; }
+.label-barcode{ width:100%; margin:3px 0; }
+.label-lwhid  { font-size:10px; font-family:monospace; font-weight:700; color:var(--ink); margin-top:2px; letter-spacing:0.5px; }
+.label-item   { font-size:9px; color:var(--ink2); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.label-desc   { font-size:8px; color:var(--ink3); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.label-qty    { display:inline-block; background:var(--ink); color:#fff; font-size:9px; font-weight:700; padding:2px 8px; border-radius:10px; margin-top:4px; }
+
+/* ===================== MOBILE ===================== */
+@media (max-width:599px) {
+  .nav-stats { display:none; }
+  .view-toggle { display:none; }
+  .tbl-wrap { display:none !important; }
+  .topnav, .search-panel { max-width:100vw; }
+  .topnav-inner { overflow:visible; gap:6px; padding:0 10px; }
+  .brand { font-size:11px; letter-spacing:1px; }
+  .nav-pill { font-size:12px; padding:5px 10px; }
+  .bay-hero-top { padding:16px 14px 14px; gap:6px; }
+  .bay-hero-body { padding:14px 16px; gap:12px; }
+  .bay-hero-foot { padding:10px 16px 14px; }
+  .bay-hero-desc { padding:0 16px 10px; }
+  .loc-chip { padding:7px 14px; font-size:13px; }
+  .card-btn  { padding:8px 14px; font-size:12px; }
+  .action-btn { padding:8px 14px; font-size:12px; }
+  .card-bay { font-size:28px; }
+  .meta-bar { flex-direction:column; align-items:flex-start; gap:6px; }
+  .meta-actions { width:100%; justify-content:flex-end; }
+  .item-fields { grid-template-columns:repeat(3,1fr); }
+}
+
+/* ===================== DESKTOP ===================== */
+@media (min-width:600px) {
+  .bay-hero-body { grid-template-columns:repeat(3,1fr); }
+  .card-fields   { grid-template-columns:repeat(4,1fr); }
+  .label-grid    { grid-template-columns:repeat(4,1fr); }
+}
+@media (min-width:600px) and (max-width:899px) {
+  .bay-hero-body { grid-template-columns:repeat(2,1fr); }
+}
+
+/* ===================== SCAN MODAL ===================== */
+.scan-modal-bg {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9);
+  z-index:500; flex-direction:column; align-items:center; justify-content:center;
+}
+.scan-modal-bg.open { display:flex; }
+.scan-modal {
+  background:#111; border-radius:16px; overflow:hidden;
+  width:min(420px, 96vw); box-shadow:0 8px 40px rgba(0,0,0,0.6);
+  display:flex; flex-direction:column;
+}
+.scan-modal-header { padding:14px 18px 10px; display:flex; align-items:center; justify-content:space-between; }
+.scan-modal-title { font-size:15px; font-weight:700; color:#fff; }
+.scan-modal-sub   { font-size:11px; color:rgba(255,255,255,0.45); margin-top:2px; }
+.scan-close-btn {
+  background:rgba(255,255,255,0.1); border:none; color:#fff;
+  width:32px; height:32px; border-radius:50%; font-size:16px;
+  display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;
+}
+.scan-viewfinder { position:relative; width:100%; height:260px; overflow:hidden; background:#000; display:block; }
+.scan-video { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; display:block; z-index:0; }
+.scan-aim { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; z-index:1; }
+.scan-aim-box { position:relative; }
+.scan-aim-box.barcode-mode { width:80%; height:44px; }
+.scan-aim-box.qr-mode      { width:200px; height:200px; }
+.scan-aim-box::before, .scan-aim-box::after,
+.scan-aim-box .corner-br, .scan-aim-box .corner-bl {
+  content:''; position:absolute; width:22px; height:22px; border-color:#fff; border-style:solid;
+}
+.scan-aim-box::before  { top:0;    left:0;  border-width:3px 0 0 3px; }
+.scan-aim-box::after   { top:0;    right:0; border-width:3px 3px 0 0; }
+.scan-aim-box .corner-br { bottom:0; right:0; border-width:0 3px 3px 0; }
+.scan-aim-box .corner-bl { bottom:0; left:0;  border-width:0 0 3px 3px; }
+.scan-line {
+  position:absolute; left:5%; right:5%; height:2px;
+  background:rgba(255,255,255,0.85); box-shadow:0 0 8px rgba(255,255,255,0.7);
+  animation:scanline 2s ease-in-out infinite; z-index:1;
+}
+@keyframes scanline { 0%{top:15%;opacity:0;} 10%{opacity:1;} 90%{opacity:1;} 100%{top:85%;opacity:0;} }
+.scan-mode-row { display:flex; gap:0; border-top:1px solid rgba(255,255,255,0.08); }
+.scan-mode-btn {
+  flex:1; padding:11px 8px; background:transparent; border:none;
+  color:rgba(255,255,255,0.45); font-size:13px; font-weight:600;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  gap:6px; transition:background 0.15s, color 0.15s;
+  border-right:1px solid rgba(255,255,255,0.08);
+}
+.scan-mode-btn:last-child { border-right:none; }
+.scan-mode-btn.active { background:rgba(255,255,255,0.18); color:#fff; }
+.scan-mode-btn:active { background:rgba(255,255,255,0.3); }
+.scan-mode-icon { font-size:16px; }
+.scan-hint { position:absolute; bottom:10px; left:0; right:0; text-align:center; font-size:11px; color:rgba(255,255,255,0.6); pointer-events:none; }
+.scan-status { padding:8px 16px; text-align:center; font-size:12px; color:rgba(255,255,255,0.55); min-height:32px; display:flex; align-items:center; justify-content:center; gap:8px; }
+.scan-status-spinner { width:14px; height:14px; border:2px solid rgba(255,255,255,0.2); border-top-color:#fff; border-radius:50%; animation:spin 0.65s linear infinite; flex-shrink:0; display:none; }
+.scan-status-spinner.show { display:block; }
+.scan-confirm { display:none; padding:14px 18px 16px; border-top:1px solid rgba(255,255,255,0.08); }
+.scan-confirm.show { display:block; }
+.scan-confirm-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:rgba(255,255,255,0.4); margin-bottom:6px; }
+.scan-confirm-input {
+  width:100%; background:rgba(255,255,255,0.08); border:1.5px solid rgba(255,255,255,0.2);
+  border-radius:8px; padding:11px 13px; font-size:18px; font-weight:700;
+  color:#fff; outline:none; font-family:'SF Mono','Courier New',monospace;
+  letter-spacing:1px; margin-bottom:10px;
+}
+.scan-confirm-input:focus { border-color:#fff; }
+.scan-confirm-actions { display:flex; gap:8px; }
+.scan-confirm-search { flex:1; background:#fff; color:#111; border:none; border-radius:8px; padding:13px; font-size:15px; font-weight:700; cursor:pointer; }
+.scan-confirm-retry {
+  background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.7);
+  border:1.5px solid rgba(255,255,255,0.15); border-radius:8px;
+  padding:13px 16px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;
+}
+#scanCanvas { display:none; }
+</style>
+</head>
+<body>
+<!-- NAV -->
+<nav class="topnav">
+  <div class="topnav-inner">
+    <div class="brand">LWH BAY LOOKUP</div>
+    <div class="nav-pills">
+      <button class="nav-pill active" id="navItems" onclick="switchTab('items')">Item Summary</button>
+      <button class="nav-pill" id="navPallets" onclick="switchTab('pallets')">Pallet Lookup</button>
+    </div>
+    <div class="nav-stats" id="navStats"></div>
+  </div>
+</nav>
+
+<!-- ITEM SUMMARY TAB -->
+<div id="itemsTab">
+  <div class="search-panel">
+    <div class="search-panel-inner">
+      <div class="search-box">
+        <input type="search" id="itemSearch"
+          placeholder="Item number, description, customer, location..."
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          inputmode="text" pattern="[^\-]*">
+        <button class="search-clear" id="itemClear" onclick="itemClearSearch()">✕</button>
+      </div>
+    </div>
+  </div>
+  <div class="content-area">
+    <div class="meta-bar" id="itemMetaBar" style="display:none">
+      <span class="result-label" id="itemResultLabel"></span>
+      <div class="meta-actions">
+        <div class="view-toggle" id="itemViewToggle">
+          <button class="view-btn active" id="ivBtnCard"  onclick="setItemView('card')">Cards</button>
+          <button class="view-btn"        id="ivBtnTable" onclick="setItemView('table')">Table</button>
+        </div>
+      </div>
+    </div>
+    <div id="itemResults">
+      <div class="state-block">
+        <div class="state-icon">*</div>
+        <div class="state-title">Item Totals Search</div>
+        <div class="state-sub">Search by Item, Description,<br>Customer, or Location</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PALLET LOOKUP TAB -->
+<div id="palletsTab" style="display:none">
+  <div class="search-panel">
+    <div class="search-panel-inner">
+      <div class="search-box">
+        <input type="search" id="palletSearch"
+          placeholder="LWH ID, Customer ID, Item, Lot, Bay..."
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          inputmode="text" pattern="[^\-]*">
+        <button class="search-clear" id="palletClear" onclick="palletClearSearch()">✕</button>
+        <button class="scan-btn" id="palletScanBtn" onclick="openScan()" title="Scan barcode or QR">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </button>
+      </div>
+      <div class="chip-row" id="locChips">
+        <div class="loc-chip active" data-loc="ALL" onclick="setLoc('ALL',this)">All Locations</div>
+      </div>
+    </div>
+  </div>
+  <div class="content-area">
+    <div class="meta-bar" id="palletMetaBar" style="display:none">
+      <span class="result-label" id="palletResultLabel"></span>
+      <div class="meta-actions">
+        <div class="view-toggle" id="palletViewToggle">
+          <button class="view-btn active" id="pvBtnCard"  onclick="setPalletView('card')">Cards</button>
+          <button class="view-btn"        id="pvBtnTable" onclick="setPalletView('table')">Table</button>
+        </div>
+        <button class="action-btn primary" id="palletPrintBtn" onclick="openPalletPrint()" style="display:none">Print Labels</button>
+      </div>
+    </div>
+    <div id="palletResults">
+      <div class="state-block">
+        <div class="state-icon">*</div>
+        <div class="state-title">Pallet Lookup</div>
+        <div class="state-sub">Search by LWH ID, Customer ID,<br>Item, Lot Number, or Bay</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- SCAN MODAL -->
+<div class="scan-modal-bg" id="scanModalBg">
+  <div class="scan-modal">
+    <div class="scan-modal-header">
+      <div>
+        <div class="scan-modal-title">Scan Pallet</div>
+        <div class="scan-modal-sub" id="scanModalSub">Point camera at barcode or QR code</div>
+      </div>
+      <button class="scan-close-btn" onclick="closeScan()">✕</button>
+    </div>
+
+    <div class="scan-viewfinder">
+      <video id="scanVideo" style="display:none" autoplay playsinline muted></video>
+      <canvas id="scanPreview" class="scan-video"></canvas>
+      <div class="scan-aim">
+        <div class="scan-aim-box barcode-mode" id="scanAimBox">
+          <div class="corner-br"></div>
+          <div class="corner-bl"></div>
+        </div>
+      </div>
+      <div class="scan-line" id="scanLine"></div>
+      <div class="scan-hint" id="scanHint">Hold steady — barcode reads automatically</div>
+    </div>
+
+    <div class="scan-status">
+      <div class="scan-status-spinner" id="scanSpinner"></div>
+      <span id="scanStatusText">Starting camera…</span>
+    </div>
+
+    <div class="scan-mode-row">
+      <button class="scan-mode-btn active" id="modeBtnBarcode" onclick="setScanMode('barcode')">
+        <span class="scan-mode-icon">▦</span> Barcode
+      </button>
+      <button class="scan-mode-btn" id="modeBtnQR" onclick="setScanMode('qr')">
+        <span class="scan-mode-icon">⊞</span> QR
+      </button>
+    </div>
+
+    <div class="scan-confirm" id="scanConfirm">
+      <div class="scan-confirm-label">Detected — edit if needed</div>
+      <input type="text" class="scan-confirm-input" id="scanConfirmInput"
+        autocorrect="off" autocapitalize="off" spellcheck="false">
+      <div class="scan-confirm-actions">
+        <button class="scan-confirm-search" onclick="commitScan()">Search ↵</button>
+        <button class="scan-confirm-retry" onclick="retryScan()">Scan Again</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<canvas id="scanCanvas"></canvas>
+
+<!-- LABEL OVERLAY -->
+<div class="overlay" id="labelOverlay">
+  <div class="overlay-box">
+    <div class="overlay-header">
+      <div>
+        <div class="overlay-title">Barcode Labels</div>
+        <div class="overlay-sub" id="labelSub"></div>
+      </div>
+      <div class="overlay-actions">
+        <button class="action-btn primary" onclick="printLabels()">Print</button>
+        <button class="action-btn" onclick="closeOverlay('labelOverlay')">Close</button>
+      </div>
+    </div>
+    <div class="overlay-body">
+      <div class="label-grid" id="labelGrid"></div>
+    </div>
+  </div>
+</div>
+<script>
+/* ============================================================
+   API CONFIG — replace with your GAS deployment URL
+============================================================ */
+var GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxxC0xgPFSpHkJbh35CcXzjqExXOeKr0RvO8DsWXnlZyMItAXKddOw0BQ55rkztt-c/exec';
+
+function api(action, params) {
+  var url = GAS_API_URL + '?action=' + encodeURIComponent(action);
+  if (params) {
+    Object.keys(params).forEach(function (k) {
+      if (params[k] !== undefined && params[k] !== null && params[k] !== '') {
+        url += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+      }
+    });
+  }
+  return fetch(url).then(function (r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  });
+}
+
+/* ============================================================
+   STATE
+============================================================ */
+var currentTab    = 'items';
+var isMobile      = window.innerWidth < 600;
+
+var itemTimer     = null;
+var itemLimit     = 50;
+var itemLastQuery = '';
+var itemResults   = [];
+var itemView      = 'card';
+
+var palletLoc        = 'ALL';
+var palletTimer       = null;
+var palletLimit       = 50;
+var palletLastQuery   = '';
+var palletResults     = [];
+var palletView        = 'card';
+
+/* ============================================================
+   SCAN STATE
+============================================================ */
+var scanStream      = null;
+var scanMode         = 'barcode';
+var barcodeLoop      = null;
+var barcodeDetector  = null;
+var barcodeActive    = false;
+var lastBeepTime     = 0;
+var previewLoop      = null;
+var polyfillLoaded   = false;
+var zxingLoaded       = false;
+var zxingReader        = null;
+
+/* ============================================================
+   INIT
+============================================================ */
+window.addEventListener('load', function () {
+  isMobile = window.innerWidth < 600;
+  loadStats();
+  loadLocations();
+  initItemSearch();
+  initPalletSearch();
+
+  if ('BarcodeDetector' in window) {
+    try {
+      barcodeDetector = new BarcodeDetector({
+        formats: ['code_128', 'code_39', 'code_93',
+                  'ean_13', 'ean_8', 'upc_a', 'upc_e',
+                  'qr_code', 'data_matrix', 'pdf417']
+      });
+    } catch (e) { barcodeDetector = null; }
+  }
+});
+
+/* ============================================================
+   TAB SWITCHING
+============================================================ */
+function switchTab(tab) {
+  currentTab = tab;
+  var isItems = tab === 'items';
+  document.getElementById('itemsTab').style.display   = isItems ? '' : 'none';
+  document.getElementById('palletsTab').style.display  = isItems ? 'none' : '';
+  document.getElementById('navItems').classList.toggle('active',  isItems);
+  document.getElementById('navPallets').classList.toggle('active', !isItems);
+}
+
+/* ============================================================
+   STATS + LOCATIONS
+============================================================ */
+function loadStats() {
+  api('getStats').then(function (s) {
+    document.getElementById('navStats').innerHTML =
+      '<strong>' + Number(s.totalPallets).toLocaleString() + '</strong> pallets · ' +
+      '<strong>' + Number(s.totalItems).toLocaleString() + '</strong> items';
+  }).catch(function (e) { console.warn('getStats failed:', e); });
+}
+
+function loadLocations() {
+  api('getLocations').then(function (locs) {
+    var row = document.getElementById('locChips');
+    row.innerHTML = '';
+    locs.forEach(function (obj) {
+      var chip = document.createElement('div');
+      chip.className = 'loc-chip' + (obj.loc === 'ALL' ? ' active' : '');
+      chip.dataset.loc = obj.loc;
+      chip.textContent = obj.loc === 'ALL' ? 'All Locations'
+        : obj.loc + (obj.count ? ' (' + obj.count + ')' : '');
+      chip.onclick = function () { setLoc(obj.loc, chip); };
+      row.appendChild(chip);
+    });
+  }).catch(function (e) { console.warn('getLocations failed:', e); });
+}
+
+/* ============================================================
+   DASH SUPPRESSION (iOS keyboard fix)
+============================================================ */
+var dashWatchInterval = null;
+function stripDashes(el) {
+  if (el.value.indexOf('-') !== -1) el.value = el.value.replace(/-/g, '');
+}
+function startDashWatch(el) {
+  stopDashWatch();
+  dashWatchInterval = setInterval(function () { stripDashes(el); }, 80);
+}
+function stopDashWatch() {
+  if (dashWatchInterval) { clearInterval(dashWatchInterval); dashWatchInterval = null; }
+}
+
+/* ============================================================
+   ITEM SUMMARY SEARCH
+============================================================ */
+function initItemSearch() {
+  var inp = document.getElementById('itemSearch');
+  inp.addEventListener('focus', function () { startDashWatch(inp); });
+  inp.addEventListener('blur', function () {
+    stopDashWatch(); stripDashes(inp);
+    setTimeout(function () { stripDashes(inp); }, 50);
+    setTimeout(function () { stripDashes(inp); }, 200);
+  });
+  inp.addEventListener('input', function () {
+    var v = inp.value.replace(/-/g, '');
+    document.getElementById('itemClear').classList.toggle('visible', v.length > 0);
+    clearTimeout(itemTimer);
+    if (!v.trim()) { itemShowHint(); return; }
+    if (v.length < 2) return;
+    itemTimer = setTimeout(function () { itemRun(v, itemLimit); }, 320);
+  });
+}
+
+function itemClearSearch() {
+  document.getElementById('itemSearch').value = '';
+  document.getElementById('itemClear').classList.remove('visible');
+  itemShowHint();
+}
+
+function itemRun(query, limit) {
+  itemLastQuery = query; itemLimit = limit;
+  document.getElementById('itemResults').innerHTML =
+    '<div class="state-block"><div class="spinner"></div>Searching...</div>';
+  document.getElementById('itemMetaBar').style.display = 'none';
+  api('searchItems', { query: query, limit: limit })
+    .then(itemRender)
+    .catch(function (e) { itemShowError(e.message); });
+}
+
+function setItemView(v) {
+  itemView = v;
+  document.getElementById('ivBtnCard').classList.toggle('active', v === 'card');
+  document.getElementById('ivBtnTable').classList.toggle('active', v === 'table');
+  itemPaint(itemResults, itemLimit);
+}
+
+function itemRender(res) {
+  if (!res.success) { itemShowError(res.error); return; }
+  itemResults = res.data;
+  var count = res.count;
+  if (isMobile) itemView = 'card';
+  document.getElementById('ivBtnCard').classList.toggle('active', itemView === 'card');
+  document.getElementById('ivBtnTable').classList.toggle('active', itemView === 'table');
+  var meta = document.getElementById('itemMetaBar');
+  meta.style.display = count > 0 ? 'flex' : 'none';
+  document.getElementById('itemResultLabel').textContent = count === 0 ? '' :
+    count === 1 ? '1 result' :
+    count + ' results' + (count >= itemLimit ? ' (showing ' + itemLimit + ')' : '');
+  if (count === 0) {
+    document.getElementById('itemResults').innerHTML =
+      '<div class="state-block"><div class="state-icon">o</div>' +
+      '<div class="state-title">No results</div>' +
+      '<div class="state-sub">Try a different item, description, or customer</div></div>';
+    return;
+  }
+  itemPaint(res.data, count);
+}
+
+function itemPaint(data, count) {
+  var html = '';
+  if (itemView === 'card') {
+    data.forEach(function (row) { html += buildItemCard(row); });
+  } else {
+    html = buildItemTable(data);
+  }
+  if ((count || data.length) >= itemLimit)
+    html += '<button class="load-more" onclick="itemRun(itemLastQuery,' + (itemLimit + 50) + ')">Load more results</button>';
+  document.getElementById('itemResults').innerHTML = html;
+}
+
+function buildItemCard(row) {
+  return '<div class="item-card">' +
+    '<div class="item-card-top">' +
+      '<div class="item-name">' + esc(row.item || '--') + '</div>' +
+      '<div class="item-loc-tag">' + esc(row.location) + '</div>' +
+    '</div>' +
+    (row.itemDesc ? '<div class="item-desc">' + esc(row.itemDesc) + '</div>' : '') +
+    '<div class="item-desc" style="font-weight:600">' + esc(row.customer || '--') + '</div>' +
+    '<div class="item-fields">' +
+      fld('Pallets', row.lwhIdCount, false) +
+      fld('Total Units', row.totalUnits, false) +
+      fld('Total Qty', row.totalQty, false) +
+    '</div>' +
+  '</div>';
+}
+
+function buildItemTable(data) {
+  var html = '<div class="tbl-wrap"><div class="tbl-scroll"><table class="data-table">' +
+    '<thead><tr><th>Location</th><th>Customer</th><th>Item</th><th>Description</th>' +
+    '<th>Pallets</th><th>Total Units</th><th>Total Qty</th></tr></thead><tbody>';
+  data.forEach(function (row) {
+    html += '<tr>' +
+      '<td>' + esc(row.location) + '</td>' +
+      '<td>' + esc(row.customer) + '</td>' +
+      '<td style="font-weight:600">' + esc(row.item || '--') + '</td>' +
+      '<td class="td-desc">' + esc(row.itemDesc || '--') + '</td>' +
+      '<td>' + esc(row.lwhIdCount) + '</td>' +
+      '<td style="font-weight:700">' + esc(row.totalUnits) + '</td>' +
+      '<td style="font-weight:700">' + esc(row.totalQty) + '</td>' +
+    '</tr>';
+  });
+  return html + '</tbody></table></div></div>';
+}
+
+function itemShowHint() {
+  document.getElementById('itemMetaBar').style.display = 'none';
+  document.getElementById('itemResults').innerHTML =
+    '<div class="state-block"><div class="state-icon">*</div>' +
+    '<div class="state-title">Item Totals Search</div>' +
+    '<div class="state-sub">Search by Item, Description,<br>Customer, or Location</div></div>';
+}
+function itemShowError(msg) {
+  document.getElementById('itemResults').innerHTML =
+    '<div class="state-block"><div class="state-icon">!</div>' +
+    '<div class="state-title">Error</div><div class="state-sub">' + esc(msg) + '</div></div>';
+}
+
+/* ============================================================
+   PALLET LOOKUP SEARCH
+============================================================ */
+function initPalletSearch() {
+  var inp = document.getElementById('palletSearch');
+  inp.addEventListener('focus', function () { startDashWatch(inp); });
+  inp.addEventListener('blur', function () {
+    stopDashWatch(); stripDashes(inp);
+    setTimeout(function () { stripDashes(inp); }, 50);
+    setTimeout(function () { stripDashes(inp); }, 200);
+    setTimeout(function () { stripDashes(inp); }, 500);
+  });
+  inp.addEventListener('input', function () {
+    var v = inp.value.replace(/-/g, '');
+    document.getElementById('palletClear').classList.toggle('visible', v.length > 0);
+    clearTimeout(palletTimer);
+    if (!v.trim()) { palletShowHint(); return; }
+    if (v.length < 2) return;
+    palletTimer = setTimeout(function () { palletRun(v, palletLimit); }, 320);
+  });
+}
+
+function setLoc(loc, el) {
+  palletLoc = loc;
+  document.querySelectorAll('.loc-chip').forEach(function (c) { c.classList.remove('active'); });
+  el.classList.add('active');
+  var q = document.getElementById('palletSearch').value;
+  if (q.length >= 2) palletRun(q, palletLimit);
+}
+
+function palletClearSearch() {
+  document.getElementById('palletSearch').value = '';
+  document.getElementById('palletClear').classList.remove('visible');
+  palletShowHint();
+}
+
+function palletRun(query, limit) {
+  palletLastQuery = query; palletLimit = limit;
+  document.getElementById('palletResults').innerHTML =
+    '<div class="state-block"><div class="spinner"></div>Searching...</div>';
+  document.getElementById('palletMetaBar').style.display = 'none';
+  api('searchPallets', { query: query, limit: limit })
+    .then(function (res) {
+      if (res.success && palletLoc !== 'ALL') {
+        res.data = res.data.filter(function (r) { return r.location === palletLoc; });
+        res.count = res.data.length;
+      }
+      palletRender(res);
+    })
+    .catch(function (e) { palletShowError(e.message); });
+}
+
+function setPalletView(v) {
+  palletView = v;
+  document.getElementById('pvBtnCard').classList.toggle('active', v === 'card');
+  document.getElementById('pvBtnTable').classList.toggle('active', v === 'table');
+  palletPaint(palletResults, palletLimit);
+}
+
+function palletRender(res) {
+  if (!res.success) { palletShowError(res.error); return; }
+  palletResults = res.data;
+  var count = res.count;
+  if (isMobile || count === 1) palletView = 'card';
+  else if (count > 4)          palletView = 'table';
+  document.getElementById('pvBtnCard').classList.toggle('active', palletView === 'card');
+  document.getElementById('pvBtnTable').classList.toggle('active', palletView === 'table');
+  var meta = document.getElementById('palletMetaBar');
+  meta.style.display = count > 0 ? 'flex' : 'none';
+  document.getElementById('palletResultLabel').textContent = count === 0 ? '' :
+    count === 1 ? '1 result' :
+    count + ' results' + (count >= palletLimit ? ' (showing ' + palletLimit + ')' : '');
+  document.getElementById('palletPrintBtn').style.display = count > 0 ? '' : 'none';
+  if (count === 0) {
+    document.getElementById('palletResults').innerHTML =
+      '<div class="state-block"><div class="state-icon">o</div>' +
+      '<div class="state-title">No results</div>' +
+      '<div class="state-sub">Try a different search term or location filter</div></div>';
+    return;
+  }
+  palletPaint(res.data, count);
+}
+
+function palletPaint(data, count) {
+  var html = '';
+  if (palletView === 'card') {
+    if (data.length === 1) html = buildBayHero(data[0]);
+    else data.forEach(function (item, idx) { html += buildPalletCard(item, idx); });
+  } else {
+    html = buildPalletTable(data);
+  }
+  if ((count || data.length) >= palletLimit)
+    html += '<button class="load-more" onclick="palletRun(palletLastQuery,' + (palletLimit + 50) + ')">Load more results</button>';
+  document.getElementById('palletResults').innerHTML = html;
+}
+
+function buildBayHero(item) {
+  var qty  = parseFloat(item.qty) || 0;
+  var qCls = qty === 0 ? 'zero' : 'good';
+  var qLabel = 'Qty ' + qty;
+  return '<div class="bay-hero-card">' +
+    '<div class="bay-hero-top">' +
+      '<div>' +
+        '<div class="bay-eyebrow">Bay Location</div>' +
+        '<div class="bay-value-giant">' + esc(item.bayName || '--') + '</div>' +
+      '</div>' +
+      '<div class="bay-meta-right">' +
+        '<div class="qty-pill ' + qCls + '">' + esc(qLabel) + '</div>' +
+        '<div class="loc-pill">' + esc(item.location) + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="bay-hero-body">' +
+      fld('Item', item.item, false) +
+      fld('LWH ID', item.lwhId, true) +
+      fld('Customer ID', item.customerId, true) +
+      fld('Customer', item.customer, false) +
+      fld('Lot Num', item.lotNum, false) +
+      fld('Units', item.units, false) +
+    '</div>' +
+    (item.itemDesc ? '<div class="bay-hero-desc">' + esc(item.itemDesc) + '</div>' : '') +
+    '<div class="bay-hero-foot">' +
+      '<button class="card-btn blue" onclick="printOneLabel(0)">Print Label</button>' +
+      '<button class="card-btn" onclick="copyText(\'' + esc(item.lwhId) + '\')">Copy LWH ID</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function buildPalletCard(item, idx) {
+  var qty  = parseFloat(item.qty) || 0;
+  var sCls = qty === 0 ? 'status-zero' : 'status-good';
+  var qCls = qty === 0 ? 'zero' : '';
+  var qLabel = 'Qty ' + qty;
+  return '<div class="inv-card ' + sCls + '" id="card-' + idx + '">' +
+    '<div class="card-row-top">' +
+      '<div class="card-bay">' + esc(item.bayName || '--') + '</div>' +
+      '<div class="card-right">' +
+        '<div class="qty-badge ' + qCls + '">' + esc(qLabel) + '</div>' +
+        '<div class="loc-tag">' + esc(item.location) + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="card-item">' + esc(item.item || '--') + '</div>' +
+    (item.itemDesc ? '<div class="card-desc">' + esc(item.itemDesc) + '</div>' : '') +
+    '<div class="card-fields">' +
+      fld('LWH ID', item.lwhId, true) +
+      fld('Customer ID', item.customerId, true) +
+      fld('Customer', item.customer, false) +
+      fld('Lot Num', item.lotNum, false) +
+    '</div>' +
+    '<div class="card-footer">' +
+      '<button class="card-btn" onclick="copyText(\'' + esc(item.lwhId) + '\')">Copy LWH ID</button>' +
+      '<button class="card-btn" onclick="toggleExpand(event,' + idx + ')">More</button>' +
+      '<button class="card-btn blue" onclick="printOneLabel(' + idx + ')">Label</button>' +
+    '</div>' +
+    '<div class="card-expand" id="xp-' + idx + '">' +
+      fld('Units', item.units, false) +
+    '</div>' +
+  '</div>';
+}
+
+function buildPalletTable(data) {
+  var html = '<div class="tbl-wrap"><div class="tbl-scroll"><table class="data-table">' +
+    '<thead><tr><th>Bay</th><th>Loc</th><th>Item</th><th>Description</th>' +
+    '<th>LWH ID</th><th>Customer ID</th><th>Customer</th><th>Lot</th><th>Qty</th><th></th></tr></thead><tbody>';
+  data.forEach(function (item, idx) {
+    var qty  = parseFloat(item.qty) || 0;
+    var qCls = qty === 0 ? 'td-qty-zero' : 'td-qty-good';
+    html += '<tr onclick="jumpToCard(' + idx + ')">' +
+      '<td class="td-bay">' + esc(item.bayName || '--') + '</td>' +
+      '<td>' + esc(item.location) + '</td>' +
+      '<td style="font-weight:600">' + esc(item.item || '--') + '</td>' +
+      '<td class="td-desc">' + esc(item.itemDesc || '--') + '</td>' +
+      '<td class="td-mono">' + esc(item.lwhId) + '</td>' +
+      '<td class="td-mono">' + esc(item.customerId || '--') + '</td>' +
+      '<td>' + esc(item.customer || '--') + '</td>' +
+      '<td class="td-mono">' + esc(item.lotNum || '--') + '</td>' +
+      '<td class="' + qCls + '">' + qty + '</td>' +
+      '<td><button class="card-btn" onclick="event.stopPropagation();copyText(\'' + esc(item.lwhId) + '\')">Copy</button></td>' +
+    '</tr>';
+  });
+  return html + '</tbody></table></div></div>';
+}
+
+function jumpToCard(idx) {
+  setPalletView('card');
+  setTimeout(function () {
+    var el = document.getElementById('card-' + idx);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 60);
+}
+
+function toggleExpand(e, idx) {
+  if (e) e.stopPropagation();
+  var el = document.getElementById('xp-' + idx);
+  if (el) el.classList.toggle('open');
+}
+
+function palletShowHint() {
+  document.getElementById('palletMetaBar').style.display = 'none';
+  document.getElementById('palletResults').innerHTML =
+    '<div class="state-block"><div class="state-icon">*</div>' +
+    '<div class="state-title">Pallet Lookup</div>' +
+    '<div class="state-sub">Search by LWH ID, Customer ID,<br>Item, Lot Number, or Bay</div></div>';
+}
+function palletShowError(msg) {
+  document.getElementById('palletResults').innerHTML =
+    '<div class="state-block"><div class="state-icon">!</div>' +
+    '<div class="state-title">Error</div><div class="state-sub">' + esc(msg) + '</div></div>';
+}
+
+/* ============================================================
+   LABEL PRINTING
+============================================================ */
+function openPalletPrint() { buildLabels(palletResults); }
+function printOneLabel(idx) { buildLabels([palletResults[idx]]); }
+
+function buildLabels(items) {
+  var q = document.getElementById('palletSearch').value;
+  document.getElementById('labelSub').textContent =
+    '"' + q + '" - ' + items.length + ' label' + (items.length !== 1 ? 's' : '') +
+    ' - ' + new Date().toLocaleDateString();
+  var html = '';
+  items.forEach(function (item) {
+    if (!item) return;
+    html += '<div class="label-card">' +
+      '<div class="label-bay">' + esc(item.bayName || '--') + '</div>' +
+      '<div class="label-loc">' + esc(item.location) + '</div>' +
+      '<svg class="label-barcode" id="bc-' + esc(item.lwhId) + '"></svg>' +
+      '<div class="label-lwhid">' + esc(item.lwhId) + '</div>' +
+      '<div class="label-item">' + esc(item.item) + '</div>' +
+      (item.itemDesc ? '<div class="label-desc">' + esc(item.itemDesc) + '</div>' : '') +
+      '<div class="label-qty">Qty: ' + (parseFloat(item.qty) || 0) + '</div>' +
+    '</div>';
+  });
+  document.getElementById('labelGrid').innerHTML = html;
+  document.getElementById('labelOverlay').classList.add('open');
+  setTimeout(function () {
+    items.forEach(function (item) {
+      if (!item || !item.lwhId) return;
+      var el = document.getElementById('bc-' + item.lwhId);
+      if (!el) return;
+      try { JsBarcode(el, item.lwhId, { format: 'CODE128', width: 1.8, height: 45, displayValue: false, margin: 2 }); }
+      catch (e) { el.style.display = 'none'; }
+    });
+  }, 100);
+}
+
+function printLabels() {
+  var grid = document.getElementById('labelGrid');
+  var w = window.open('', '_blank');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+    '<title>Barcode Labels</title>' +
+    '<style>' +
+    'body{font-family:Arial,sans-serif;margin:12px;}' +
+    '.label-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}' +
+    '.label-card{border:1.5px solid #ccc;border-radius:8px;padding:10px 8px 8px;text-align:center;page-break-inside:avoid;break-inside:avoid;}' +
+    '.label-bay{font-size:22px;font-weight:900;letter-spacing:0.5px;color:#000;margin-bottom:1px;}' +
+    '.label-loc{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:5px;}' +
+    '.label-barcode{width:100%;margin:3px 0;}' +
+    '.label-lwhid{font-size:10px;font-family:monospace;font-weight:700;color:#000;margin-top:2px;}' +
+    '.label-item{font-size:9px;color:#444;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '.label-desc{font-size:8px;color:#888;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '.label-qty{display:inline-block;background:#000;color:#fff;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;margin-top:4px;}' +
+    '@media print{@page{margin:10mm;} body{margin:0;}}' +
+    '</style></head><body>' +
+    '<div class="label-grid">' + grid.innerHTML + '</div>' +
+    '</body></html>');
+  w.document.close();
+  setTimeout(function () { w.focus(); w.print(); }, 500);
+}
+
+/* ============================================================
+   SCAN — OPEN / CLOSE / MODE
+============================================================ */
+function openScan() {
+  scanMode = 'barcode';
+  setScanStatus('Starting camera...', false);
+  document.getElementById('scanConfirm').classList.remove('show');
+  document.getElementById('modeBtnBarcode').classList.add('active');
+  document.getElementById('modeBtnQR').classList.remove('active');
+  document.getElementById('scanAimBox').className = 'scan-aim-box barcode-mode';
+  document.getElementById('scanHint').textContent = 'Hold steady — barcode reads automatically';
+  document.getElementById('scanModalBg').classList.add('open');
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+  }).then(function (stream) {
+    scanStream = stream;
+    var video = document.getElementById('scanVideo');
+    video.srcObject = stream;
+    video.play().then(function () {
+      setScanStatus('Starting scanner...', false);
+      startPreviewLoop();
+      startBarcodeLoop();
+    });
+  }).catch(function (err) {
+    setScanStatus('Camera error: ' + err.message, false);
+  });
+}
+
+function closeScan() {
+  stopBarcodeLoop();
+  stopPreviewLoop();
+  document.getElementById('scanModalBg').classList.remove('open');
+  if (scanStream) { scanStream.getTracks().forEach(function (t) { t.stop(); }); scanStream = null; }
+  document.getElementById('scanVideo').srcObject = null;
+}
+
+function retryScan() {
+  document.getElementById('scanConfirm').classList.remove('show');
+  setScanStatus('Scanning for ' + (scanMode === 'qr' ? 'QR codes' : 'barcodes') + '...', false);
+  startBarcodeLoop();
+}
+
+function setScanMode(mode) {
+  scanMode = mode;
+  var isQR = mode === 'qr';
+  document.getElementById('modeBtnBarcode').classList.toggle('active', !isQR);
+  document.getElementById('modeBtnQR').classList.toggle('active', isQR);
+  document.getElementById('scanAimBox').className = 'scan-aim-box ' + (isQR ? 'qr-mode' : 'barcode-mode');
+  document.getElementById('scanHint').textContent = isQR
+    ? 'Centre the QR code in the square'
+    : 'Hold steady — barcode reads automatically';
+  document.getElementById('scanConfirm').classList.remove('show');
+  setScanStatus('Scanning for ' + (isQR ? 'QR codes' : 'barcodes') + '...', false);
+  startBarcodeLoop();
+}
+
+/* ============================================================
+   PREVIEW LOOP — draws video frames to canvas
+============================================================ */
+function startPreviewLoop() {
+  var vid = document.getElementById('scanVideo');
+  var can = document.getElementById('scanPreview');
+  stopPreviewLoop();
+  function draw() {
+    if (!scanStream) return;
+    if (vid.videoWidth > 0 && vid.videoHeight > 0) {
+      if (can.width !== vid.videoWidth) can.width = vid.videoWidth;
+      if (can.height !== vid.videoHeight) can.height = vid.videoHeight;
+      try { can.getContext('2d').drawImage(vid, 0, 0, can.width, can.height); } catch (e) {}
+    }
+    previewLoop = requestAnimationFrame(draw);
+  }
+  draw();
+  vid.addEventListener('loadeddata', draw);
+  vid.addEventListener('playing', draw);
+}
+function stopPreviewLoop() {
+  if (previewLoop) { cancelAnimationFrame(previewLoop); previewLoop = null; }
+}
+
+/* ============================================================
+   BARCODE PREPROCESSING
+============================================================ */
+function getBarcodeCanvas_(srcCanvas) {
+  var sw = srcCanvas.width, sh = srcCanvas.height;
+  var cw = Math.round(sw * 0.9), ch = Math.round(sh * 0.5);
+  var cx = Math.round((sw - cw) / 2), cy = Math.round((sh - ch) / 2);
+  var out = document.createElement('canvas');
+  out.width = Math.round(cw * 1.5);
+  out.height = Math.round(ch * 1.5);
+  var ctx = out.getContext('2d');
+  ctx.filter = 'grayscale(1) contrast(2.0) brightness(1.05)';
+  ctx.drawImage(srcCanvas, cx, cy, cw, ch, 0, 0, out.width, out.height);
+  return out;
+}
+
+/* ============================================================
+   BARCODE LOOP — native BarcodeDetector, else polyfill, else ZXing
+============================================================ */
+function startBarcodeLoop() {
+  if (!barcodeDetector) {
+    setTimeout(function () {
+      if (barcodeDetector) {
+        barcodeActive = true;
+        pollBarcode();
+      } else {
+        loadPolyfill();
+      }
+    }, 600);
+    return;
+  }
+  barcodeActive = true;
+  pollBarcode();
+}
+
+function stopBarcodeLoop() {
+  barcodeActive = false;
+  if (barcodeLoop) { clearTimeout(barcodeLoop); cancelAnimationFrame(barcodeLoop); barcodeLoop = null; }
+}
+
+function pollBarcode() {
+  if (!barcodeActive || !barcodeDetector) return;
+  var preview = document.getElementById('scanPreview');
+  if (!preview || !preview.width || !preview.height) {
+    barcodeLoop = setTimeout(function () { if (barcodeActive) pollBarcode(); }, 100);
+    return;
+  }
+  var bc = getBarcodeCanvas_(preview);
+  barcodeDetector.detect(bc)
+    .then(function (codes) {
+      if (!barcodeActive) return;
+      if (codes && codes.length > 0 && codes[0].rawValue) {
+        stopBarcodeLoop();
+        playBeep();
+        showScanConfirm(codes[0].rawValue);
+      } else {
+        barcodeLoop = setTimeout(function () { if (barcodeActive) pollBarcode(); }, 100);
+      }
+    })
+    .catch(function () {
+      barcodeLoop = setTimeout(function () { if (barcodeActive) pollBarcode(); }, 200);
+    });
+}
+
+/* Polyfill fallback (ZBar WASM — works on iOS Safari too) */
+function loadPolyfill() {
+  if (polyfillLoaded) { initPolyfill(); return; }
+  setScanStatus('Loading barcode engine...', true);
+  var s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/@undecaf/barcode-detector-polyfill@0.9.23/dist/index.js';
+  s.onload = function () { polyfillLoaded = true; initPolyfill(); };
+  s.onerror = function () { loadZXingFallback(); };
+  document.head.appendChild(s);
+}
+function initPolyfill() {
+  try {
+    var Poly = window.BarcodeDetectorPolyfill ||
+               (window.barcodeDetectorPolyfill && window.barcodeDetectorPolyfill.BarcodeDetectorPolyfill);
+    if (!Poly) { loadZXingFallback(); return; }
+    barcodeDetector = new Poly({
+      formats: ['code_128', 'code_39', 'code_93', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code', 'pdf417']
+    });
+    barcodeActive = true;
+    pollBarcode();
+  } catch (e) { loadZXingFallback(); }
+}
+
+/* ZXing fallback */
+function loadZXingFallback() {
+  if (zxingLoaded) { startZXing(); return; }
+  setScanStatus('Loading barcode engine...', true);
+  var s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.4/umd/index.min.js';
+  s.onload = function () { zxingLoaded = true; startZXing(); };
+  s.onerror = function () {
+    setScanStatus('Barcode engine unavailable — try again or type manually', false);
+  };
+  document.head.appendChild(s);
+}
+function startZXing() {
+  try {
+    var ReaderClass = window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader;
+    if (!ReaderClass) { setScanStatus('Barcode reader not found', false); return; }
+    zxingReader = new ReaderClass();
+    barcodeActive = true;
+    pollZXing();
+  } catch (e) { setScanStatus('Barcode error: ' + e.message, false); }
+}
+function pollZXing() {
+  if (!barcodeActive || !zxingReader) return;
+  var preview = document.getElementById('scanPreview');
+  if (!preview || !preview.width) { setTimeout(pollZXing, 200); return; }
+  var bc = getBarcodeCanvas_(preview);
+  try {
+    var resultPromise = zxingReader.decodeFromCanvas
+      ? zxingReader.decodeFromCanvas(bc)
+      : Promise.resolve(zxingReader.decode(bc));
+    resultPromise.then(function (result) {
+      if (!barcodeActive) return;
+      var text = result && (result.getText ? result.getText() : result.text);
+      if (text) { stopBarcodeLoop(); playBeep(); showScanConfirm(text); }
+      else setTimeout(function () { if (barcodeActive) pollZXing(); }, 150);
+    }).catch(function () {
+      setTimeout(function () { if (barcodeActive) pollZXing(); }, 150);
+    });
+  } catch (e) {
+    setTimeout(function () { if (barcodeActive) pollZXing(); }, 300);
+  }
+}
+
+/* ============================================================
+   BEEP
+============================================================ */
+function playBeep() {
+  var now = Date.now();
+  if (now - lastBeepTime < 1000) return;
+  lastBeepTime = now;
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 1800;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.12);
+  } catch (e) {}
+}
+
+/* ============================================================
+   SCAN — CONFIRM + COMMIT
+============================================================ */
+function showScanConfirm(token) {
+  setScanStatus('Detected — confirm or edit below', false);
+  var input = document.getElementById('scanConfirmInput');
+  input.value = token;
+  document.getElementById('scanConfirm').classList.add('show');
+  setTimeout(function () { input.focus(); input.select(); }, 80);
+}
+
+function commitScan() {
+  var val = document.getElementById('scanConfirmInput').value.trim();
+  if (!val) return;
+  closeScan();
+  switchTab('pallets');
+  var inp = document.getElementById('palletSearch');
+  inp.value = val;
+  document.getElementById('palletClear').classList.add('visible');
+  palletRun(val, palletLimit);
+  showToast('Searching: ' + val);
+}
+
+function setScanStatus(msg, spinning) {
+  document.getElementById('scanStatusText').textContent = msg;
+  document.getElementById('scanSpinner').classList.toggle('show', !!spinning);
+}
+
+/* ============================================================
+   SHARED UTILS
+============================================================ */
+function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
+
+function copyText(val) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(val).then(function () { showToast('Copied: ' + val); });
+  } else {
+    var ta = document.createElement('textarea');
+    ta.value = val; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    showToast('Copied: ' + val);
+  }
+}
+
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(function () { t.classList.remove('show'); }, 2200);
+}
+
+function fld(label, value, mono) {
+  return '<div class="fld">' +
+    '<div class="fld-label">' + label + '</div>' +
+    '<div class="fld-value' + (mono ? ' mono' : '') + '">' + esc(value || '--') + '</div>' +
+  '</div>';
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+
+<script>
+/* PWA — register service worker */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js')
+      .then(function (reg) { console.log('SW registered:', reg.scope); })
+      .catch(function (err) { console.log('SW failed:', err); });
+  });
+}
+</script>
+</body>
+</html>
