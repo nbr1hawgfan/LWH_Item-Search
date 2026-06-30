@@ -328,14 +328,14 @@ table.data-table tbody td { padding:9px 13px; color:var(--ink); font-weight:500;
   </div>
   <div class="topnav-row2">
     <div class="nav-pills">
-      <button class="nav-pill active" id="navItems" onclick="switchTab('items')">Item Summary</button>
-      <button class="nav-pill" id="navPallets" onclick="switchTab('pallets')">Pallet Lookup</button>
+      <button class="nav-pill active" id="navPallets" onclick="switchTab('pallets')">Pallet Lookup</button>
+      <button class="nav-pill" id="navItems" onclick="switchTab('items')">Item Summary</button>
     </div>
   </div>
 </nav>
 
 <!-- ITEM SUMMARY TAB -->
-<div id="itemsTab">
+<div id="itemsTab" style="display:none">
   <div class="search-panel">
     <div class="search-panel-inner">
       <div class="search-box">
@@ -378,7 +378,7 @@ table.data-table tbody td { padding:9px 13px; color:var(--ink); font-weight:500;
 </div>
 
 <!-- PALLET LOOKUP TAB -->
-<div id="palletsTab" style="display:none">
+<div id="palletsTab">
   <div class="search-panel">
     <div class="search-panel-inner">
       <div class="search-box">
@@ -530,7 +530,7 @@ function api(action, params) {
 /* ============================================================
    STATE
 ============================================================ */
-var currentTab    = 'items';
+var currentTab    = 'pallets';
 var appStats      = null;
 var isMobile      = window.innerWidth < 600;
 
