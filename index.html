@@ -324,6 +324,12 @@ table.data-table tbody td { padding:9px 13px; color:var(--ink); font-weight:500;
           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
           inputmode="text">
         <button class="search-clear" id="itemClear" onclick="itemClearSearch()">✕</button>
+        <button class="scan-btn" id="itemScanBtn" onclick="openScan('items')" title="Scan item barcode or QR">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </button>
       </div>
     </div>
   </div>
@@ -357,7 +363,7 @@ table.data-table tbody td { padding:9px 13px; color:var(--ink); font-weight:500;
           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
           inputmode="text">
         <button class="search-clear" id="palletClear" onclick="palletClearSearch()">✕</button>
-        <button class="scan-btn" id="palletScanBtn" onclick="openScan()" title="Scan barcode or QR">
+        <button class="scan-btn" id="palletScanBtn" onclick="openScan('pallets')" title="Scan barcode or QR">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
             <circle cx="12" cy="13" r="4"/>
@@ -506,6 +512,7 @@ var palletView        = 'card';
    SCAN STATE
 ============================================================ */
 var scanStream      = null;
+var scanTarget       = 'pallets';
 var scanMode         = 'barcode';
 var barcodeLoop      = null;
 var barcodeDetector  = null;
@@ -961,7 +968,8 @@ function printLabels() {
 /* ============================================================
    SCAN — OPEN / CLOSE / MODE
 ============================================================ */
-function openScan() {
+function openScan(target) {
+  scanTarget = target || 'pallets';
   scanMode = 'barcode';
   setScanStatus('Starting camera...', false);
   document.getElementById('scanConfirm').classList.remove('show');
@@ -969,6 +977,8 @@ function openScan() {
   document.getElementById('modeBtnQR').classList.remove('active');
   document.getElementById('scanAimBox').className = 'scan-aim-box barcode-mode';
   document.getElementById('scanHint').textContent = 'Hold steady — barcode reads automatically';
+  var titleEl = document.querySelector('.scan-modal-title');
+  if (titleEl) titleEl.textContent = scanTarget === 'items' ? 'Scan Item Tag' : 'Scan Pallet';
   document.getElementById('scanModalBg').classList.add('open');
   navigator.mediaDevices.getUserMedia({
     video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
@@ -1204,11 +1214,19 @@ function commitScan() {
   var val = document.getElementById('scanConfirmInput').value.trim();
   if (!val) return;
   closeScan();
-  switchTab('pallets');
-  var inp = document.getElementById('palletSearch');
-  inp.value = val;
-  document.getElementById('palletClear').classList.add('visible');
-  palletRun(val, palletLimit);
+  if (scanTarget === 'items') {
+    switchTab('items');
+    var itemInp = document.getElementById('itemSearch');
+    itemInp.value = val;
+    document.getElementById('itemClear').classList.add('visible');
+    itemRun(val, itemLimit);
+  } else {
+    switchTab('pallets');
+    var palletInp = document.getElementById('palletSearch');
+    palletInp.value = val;
+    document.getElementById('palletClear').classList.add('visible');
+    palletRun(val, palletLimit);
+  }
   showToast('Searching: ' + val);
 }
 
