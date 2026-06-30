@@ -335,6 +335,9 @@ table.data-table tbody td { padding:9px 13px; color:var(--ink); font-weight:500;
           </svg>
         </button>
       </div>
+      <div class="chip-row" id="itemLocChips">
+        <div class="loc-chip active" data-loc="ALL" onclick="setItemLoc('ALL',this)">All Locations</div>
+      </div>
     </div>
   </div>
   <div class="content-area">
@@ -345,6 +348,7 @@ table.data-table tbody td { padding:9px 13px; color:var(--ink); font-weight:500;
           <button class="view-btn active" id="ivBtnCard"  onclick="setItemView('card')">Cards</button>
           <button class="view-btn"        id="ivBtnTable" onclick="setItemView('table')">Table</button>
         </div>
+        <button class="action-btn primary" id="itemExportBtn" onclick="downloadItemCSV()" style="display:none">Export CSV</button>
       </div>
     </div>
     <div id="itemResults">
@@ -388,6 +392,7 @@ table.data-table tbody td { padding:9px 13px; color:var(--ink); font-weight:500;
           <button class="view-btn"        id="pvBtnTable" onclick="setPalletView('table')">Table</button>
         </div>
         <button class="action-btn primary" id="palletPrintBtn" onclick="openPalletPrint()" style="display:none">Print Labels</button>
+        <button class="action-btn" id="palletExportBtn" onclick="downloadPalletCSV()" style="display:none">Export CSV</button>
       </div>
     </div>
     <div id="palletResults">
@@ -497,6 +502,7 @@ function api(action, params) {
    STATE
 ============================================================ */
 var currentTab    = 'items';
+var appStats      = null;
 var isMobile      = window.innerWidth < 600;
 
 var itemTimer     = null;
@@ -504,6 +510,7 @@ var itemLimit     = 50;
 var itemLastQuery = '';
 var itemResults   = [];
 var itemView      = 'card';
+var itemLoc       = 'ALL';
 
 var palletLoc        = 'ALL';
 var palletTimer       = null;
@@ -578,26 +585,66 @@ function switchTab(tab) {
 ============================================================ */
 function loadStats() {
   api('getStats').then(function (s) {
+    appStats = s;
     document.getElementById('navStats').innerHTML =
       '<strong>' + Number(s.totalPallets).toLocaleString() + '</strong> pallets · ' +
-      '<strong>' + Number(s.totalItems).toLocaleString() + '</strong> items';
+      '<strong>' + Number(s.totalItems).toLocaleString() + '</strong> items' +
+      (s.lastSync ? ' · synced ' + esc(s.lastSync) : '');
+    renderDataBanner();
   }).catch(function (e) { console.warn('getStats failed:', e); });
+}
+
+/* Shows a banner if the source sheet looks empty — most likely the
+   evening query dump hasn't run yet rather than a real "no results" */
+function renderDataBanner() {
+  var existing = document.getElementById('dataFreshBanner');
+  if (existing) existing.remove();
+  if (!appStats) return;
+  if (!appStats.invIsEmpty && !appStats.itemsIsEmpty) return;
+
+  var which = appStats.invIsEmpty && appStats.itemsIsEmpty ? 'Inventory and Items sheets are'
+            : appStats.invIsEmpty ? 'Inventory sheet is'
+            : 'Items sheet is';
+
+  var banner = document.createElement('div');
+  banner.id = 'dataFreshBanner';
+  banner.style.cssText = 'background:var(--amber-lt);border-bottom:2px solid var(--amber);' +
+    'color:var(--amber);font-size:12px;font-weight:700;padding:8px 14px;text-align:center;';
+  banner.textContent = 'Heads up — the ' + which + ' empty. The evening data dump may not have run yet.';
+  var nav = document.querySelector('.topnav');
+  nav.parentNode.insertBefore(banner, nav.nextSibling);
+}
+
+/* Human-friendly "how stale is this data" hint, used in empty-result states */
+function lastSyncHint() {
+  if (!appStats || !appStats.lastSyncISO) return '';
+  var mins = Math.round((Date.now() - new Date(appStats.lastSyncISO).getTime()) / 60000);
+  if (mins < 0) return '';
+  if (mins < 60) return 'Data last synced ' + mins + ' minute' + (mins === 1 ? '' : 's') + ' ago — very recent pallets may not show yet.';
+  var hrs = Math.round(mins / 60);
+  return 'Data last synced ' + hrs + ' hour' + (hrs === 1 ? '' : 's') + ' ago.';
 }
 
 function loadLocations() {
   api('getLocations').then(function (locs) {
-    var row = document.getElementById('locChips');
-    row.innerHTML = '';
-    locs.forEach(function (obj) {
-      var chip = document.createElement('div');
-      chip.className = 'loc-chip' + (obj.loc === 'ALL' ? ' active' : '');
-      chip.dataset.loc = obj.loc;
-      chip.textContent = obj.loc === 'ALL' ? 'All Locations'
-        : obj.loc + (obj.count ? ' (' + obj.count + ')' : '');
-      chip.onclick = function () { setLoc(obj.loc, chip); };
-      row.appendChild(chip);
-    });
+    populateLocChips('locChips', locs, setLoc);
+    populateLocChips('itemLocChips', locs, setItemLoc);
   }).catch(function (e) { console.warn('getLocations failed:', e); });
+}
+
+function populateLocChips(containerId, locs, handler) {
+  var row = document.getElementById(containerId);
+  if (!row) return;
+  row.innerHTML = '';
+  locs.forEach(function (obj) {
+    var chip = document.createElement('div');
+    chip.className = 'loc-chip' + (obj.loc === 'ALL' ? ' active' : '');
+    chip.dataset.loc = obj.loc;
+    chip.textContent = obj.loc === 'ALL' ? 'All Locations'
+      : obj.loc + (obj.count ? ' (' + obj.count + ')' : '');
+    chip.onclick = function () { handler(obj.loc, chip); };
+    row.appendChild(chip);
+  });
 }
 
 /* ============================================================
@@ -626,9 +673,17 @@ function itemRun(query, limit) {
   document.getElementById('itemResults').innerHTML =
     '<div class="state-block"><div class="spinner"></div>Searching...</div>';
   document.getElementById('itemMetaBar').style.display = 'none';
-  api('searchItems', { query: query, limit: limit })
+  api('searchItems', { query: query, location: itemLoc, limit: limit })
     .then(itemRender)
     .catch(function (e) { itemShowError(e.message); });
+}
+
+function setItemLoc(loc, el) {
+  itemLoc = loc;
+  document.querySelectorAll('#itemLocChips .loc-chip').forEach(function (c) { c.classList.remove('active'); });
+  el.classList.add('active');
+  var q = document.getElementById('itemSearch').value;
+  if (q.length >= 2) itemRun(q, itemLimit);
 }
 
 function setItemView(v) {
@@ -642,6 +697,7 @@ function itemRender(res) {
   if (!res.success) { itemShowError(res.error); return; }
   itemResults = res.data;
   var count = res.count;
+  if (count > 0) addRecent_('lwh_recent_items', itemLastQuery);
   if (isMobile) itemView = 'card';
   document.getElementById('ivBtnCard').classList.toggle('active', itemView === 'card');
   document.getElementById('ivBtnTable').classList.toggle('active', itemView === 'table');
@@ -650,11 +706,14 @@ function itemRender(res) {
   document.getElementById('itemResultLabel').textContent = count === 0 ? '' :
     count === 1 ? '1 result' :
     count + ' results' + (count >= itemLimit ? ' (showing ' + itemLimit + ')' : '');
+  document.getElementById('itemExportBtn').style.display = count > 0 ? '' : 'none';
   if (count === 0) {
+    var hint = lastSyncHint();
     document.getElementById('itemResults').innerHTML =
       '<div class="state-block"><div class="state-icon">o</div>' +
       '<div class="state-title">No results</div>' +
-      '<div class="state-sub">Try a different item, description, or customer</div></div>';
+      '<div class="state-sub">Try a different item, description, or customer' +
+      (hint ? '<br><br>' + esc(hint) : '') + '</div></div>';
     return;
   }
   itemPaint(res.data, count);
@@ -685,6 +744,9 @@ function buildItemCard(row) {
       fld('Total Units', row.totalUnits, false) +
       fld('Total Qty', row.totalQty, false) +
     '</div>' +
+    '<div class="card-footer">' +
+      '<button class="card-btn" onclick="copyText(\'' + esc(row.item) + '\')">Copy Item</button>' +
+    '</div>' +
   '</div>';
 }
 
@@ -706,12 +768,50 @@ function buildItemTable(data) {
   return html + '</tbody></table></div></div>';
 }
 
+/* ============================================================
+   RECENT SEARCHES — persisted in localStorage, last 6 per tab
+============================================================ */
+function getRecent_(key) {
+  try {
+    var raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+function addRecent_(key, term) {
+  term = (term || '').trim();
+  if (!term) return;
+  try {
+    var list = getRecent_(key);
+    list = list.filter(function (t) { return t.toLowerCase() !== term.toLowerCase(); });
+    list.unshift(term);
+    list = list.slice(0, 6);
+    localStorage.setItem(key, JSON.stringify(list));
+  } catch (e) {}
+}
+function buildRecentChips_(key, runFn) {
+  var list = getRecent_(key);
+  if (!list.length) return '';
+  var html = '<div style="margin-top:18px"><div class="section-label" style="margin-bottom:6px">Recent Searches</div>' +
+    '<div class="chip-row" style="overflow-x:visible;flex-wrap:wrap;justify-content:center">';
+  list.forEach(function (term) {
+    html += '<div class="loc-chip" onclick="' + runFn + '(' + JSON.stringify(term) + ')">' + esc(term) + '</div>';
+  });
+  return html + '</div></div>';
+}
+
 function itemShowHint() {
   document.getElementById('itemMetaBar').style.display = 'none';
   document.getElementById('itemResults').innerHTML =
     '<div class="state-block"><div class="state-icon">*</div>' +
     '<div class="state-title">Item Totals Search</div>' +
-    '<div class="state-sub">Search by Item, Description,<br>Customer, or Location</div></div>';
+    '<div class="state-sub">Search by Item, Description,<br>Customer, or Location</div>' +
+    buildRecentChips_('lwh_recent_items', 'runRecentItem') + '</div>';
+}
+function runRecentItem(term) {
+  var inp = document.getElementById('itemSearch');
+  inp.value = term;
+  document.getElementById('itemClear').classList.add('visible');
+  itemRun(term, itemLimit);
 }
 function itemShowError(msg) {
   document.getElementById('itemResults').innerHTML =
@@ -736,7 +836,7 @@ function initPalletSearch() {
 
 function setLoc(loc, el) {
   palletLoc = loc;
-  document.querySelectorAll('.loc-chip').forEach(function (c) { c.classList.remove('active'); });
+  document.querySelectorAll('#locChips .loc-chip').forEach(function (c) { c.classList.remove('active'); });
   el.classList.add('active');
   var q = document.getElementById('palletSearch').value;
   if (q.length >= 2) palletRun(q, palletLimit);
@@ -753,14 +853,8 @@ function palletRun(query, limit) {
   document.getElementById('palletResults').innerHTML =
     '<div class="state-block"><div class="spinner"></div>Searching...</div>';
   document.getElementById('palletMetaBar').style.display = 'none';
-  api('searchPallets', { query: query, limit: limit })
-    .then(function (res) {
-      if (res.success && palletLoc !== 'ALL') {
-        res.data = res.data.filter(function (r) { return r.location === palletLoc; });
-        res.count = res.data.length;
-      }
-      palletRender(res);
-    })
+  api('searchPallets', { query: query, location: palletLoc, limit: limit })
+    .then(palletRender)
     .catch(function (e) { palletShowError(e.message); });
 }
 
@@ -775,6 +869,7 @@ function palletRender(res) {
   if (!res.success) { palletShowError(res.error); return; }
   palletResults = res.data;
   var count = res.count;
+  if (count > 0) addRecent_('lwh_recent_pallets', palletLastQuery);
   if (isMobile || count === 1) palletView = 'card';
   else if (count > 4)          palletView = 'table';
   document.getElementById('pvBtnCard').classList.toggle('active', palletView === 'card');
@@ -785,11 +880,14 @@ function palletRender(res) {
     count === 1 ? '1 result' :
     count + ' results' + (count >= palletLimit ? ' (showing ' + palletLimit + ')' : '');
   document.getElementById('palletPrintBtn').style.display = count > 0 ? '' : 'none';
+  document.getElementById('palletExportBtn').style.display = count > 0 ? '' : 'none';
   if (count === 0) {
+    var hint = lastSyncHint();
     document.getElementById('palletResults').innerHTML =
       '<div class="state-block"><div class="state-icon">o</div>' +
       '<div class="state-title">No results</div>' +
-      '<div class="state-sub">Try a different search term or location filter</div></div>';
+      '<div class="state-sub">Try a different search term or location filter' +
+      (hint ? '<br><br>' + esc(hint) : '') + '</div></div>';
     return;
   }
   palletPaint(res.data, count);
@@ -913,7 +1011,14 @@ function palletShowHint() {
   document.getElementById('palletResults').innerHTML =
     '<div class="state-block"><div class="state-icon">*</div>' +
     '<div class="state-title">Pallet Lookup</div>' +
-    '<div class="state-sub">Search by LWH ID, Customer ID,<br>Item, Lot Number, or Bay</div></div>';
+    '<div class="state-sub">Search by LWH ID, Customer ID,<br>Item, Lot Number, or Bay</div>' +
+    buildRecentChips_('lwh_recent_pallets', 'runRecentPallet') + '</div>';
+}
+function runRecentPallet(term) {
+  var inp = document.getElementById('palletSearch');
+  inp.value = term;
+  document.getElementById('palletClear').classList.add('visible');
+  palletRun(term, palletLimit);
 }
 function palletShowError(msg) {
   document.getElementById('palletResults').innerHTML =
@@ -980,6 +1085,64 @@ function printLabels() {
     '</body></html>');
   w.document.close();
   setTimeout(function () { w.focus(); w.print(); }, 500);
+}
+
+/* ============================================================
+   CSV EXPORT
+============================================================ */
+function csvEscape_(v) {
+  var s = String(v == null ? '' : v);
+  return (s.indexOf(',') > -1 || s.indexOf('"') > -1 || s.indexOf('\n') > -1)
+    ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function downloadCSV_(filenamePrefix, cols, rows) {
+  var csv = [cols.map(function (c) { return c.label; }).join(',')];
+  rows.forEach(function (row) {
+    csv.push(cols.map(function (c) { return csvEscape_(row[c.key]); }).join(','));
+  });
+  var blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filenamePrefix + '_' + fmtDate(new Date()) + '.csv';
+  a.click();
+}
+
+function downloadItemCSV() {
+  if (!itemResults.length) return;
+  downloadCSV_('lwh_item_totals', [
+    { key: 'location',    label: 'Location' },
+    { key: 'customer',    label: 'Customer' },
+    { key: 'item',        label: 'Item' },
+    { key: 'itemDesc',    label: 'Description' },
+    { key: 'lwhIdCount',  label: 'Pallets' },
+    { key: 'totalUnits',  label: 'Total Units' },
+    { key: 'totalQty',    label: 'Total Qty' }
+  ], itemResults);
+  showToast('CSV downloaded');
+}
+
+function downloadPalletCSV() {
+  if (!palletResults.length) return;
+  downloadCSV_('lwh_pallet_lookup', [
+    { key: 'location',    label: 'Location' },
+    { key: 'bayName',     label: 'Bay' },
+    { key: 'lwhId',       label: 'LWH ID' },
+    { key: 'customerId',  label: 'Customer ID' },
+    { key: 'customer',    label: 'Customer' },
+    { key: 'item',        label: 'Item' },
+    { key: 'itemDesc',    label: 'Description' },
+    { key: 'lotNum',      label: 'Lot Num' },
+    { key: 'units',       label: 'Units' },
+    { key: 'qty',         label: 'Qty' }
+  ], palletResults);
+  showToast('CSV downloaded');
+}
+
+function fmtDate(d) {
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
 }
 
 /* ============================================================
